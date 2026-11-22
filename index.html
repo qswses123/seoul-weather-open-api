@@ -1,0 +1,123 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>서울 날씨</title>
+  <style>
+    :root { color-scheme: light; font-family: "Inter", "Apple SD Gothic Neo", "Malgun Gothic", sans-serif; color: #172d47; background: #f3f6f9; }
+    * { box-sizing: border-box; }
+    body { margin: 0; }
+    main { width: min(54rem, calc(100% - 2rem)); margin: clamp(2rem, 8vh, 6rem) auto; }
+    header, footer, .section-head { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 0.8rem; }
+    h1, h2, p, dl, dd { margin: 0; }
+    h1 { font-size: clamp(1.85rem, 4vw, 2.5rem); letter-spacing: -0.055em; }
+    button { color: #173959; font: inherit; font-weight: 600; border: 1px solid #bac7d4; background: white; border-radius: 2rem; padding: .62rem 1.05rem; cursor: pointer; }
+    button:hover { background: #eaf0f7; }
+    button:disabled { cursor: wait; }
+    :focus-visible { outline: 3px solid #c16a00; outline-offset: 3px; }
+    .hero { position: relative; isolation: isolate; overflow: hidden; margin: 1.3rem 0 1.7rem; border-radius: 1.25rem; padding: clamp(1.5rem, 5vw, 3rem); color: white; background: linear-gradient(112deg, #142f4f 2%, #345b80 63%, #86a6ba); }
+    .hero h2 { font-size: 1.05rem; }
+    .reading { display: flex; align-items: flex-start; margin: 1.1rem 0 .5rem; }
+    #temperature { font-size: clamp(4.8rem, 10vw, 7rem); line-height: 1; letter-spacing: -.065em; font-variant-numeric: tabular-nums; }
+    .unit { font-size: 1.75rem; margin: .55rem 0 0 .45rem; }
+    #condition { font-size: 1.4rem; font-weight: 650; }
+    .date { margin-top: 1.6rem; font-size: .92rem; color: #e0ebf6; }
+    .landscape { position: absolute; z-index: -1; inset: 0 0 0 43%; pointer-events: none; overflow: hidden; }
+    .landscape::before, .landscape::after { position: absolute; content: ""; inset: 0; }
+    .landscape::before { background: #577c96; clip-path: polygon(0 100%, 30% 73%, 39% 76%, 62% 58%, 70% 63%, 91% 44%, 100% 47%, 100% 100%); }
+    .landscape::after { background: #264860; clip-path: polygon(0 100%, 18% 92%, 32% 93%, 53% 77%, 62% 66%, 70% 68%, 83% 79%, 100% 69%, 100% 100%); }
+    .tower { position: absolute; left: 62%; bottom: 32%; width: 5%; height: 37%; background: #264860; clip-path: polygon(49% 0,55% 0,58% 26%,73% 29%,74% 34%,92% 36%,88% 45%,65% 47%,63% 92%,78% 100%,22% 100%,40% 90%,40% 47%,16% 45%,10% 36%,31% 34%,31% 29%,46% 26%); }
+    .section-head h2 { font-size: 1.2rem; letter-spacing: -.03em; }
+    dl { display: grid; grid-template-columns: repeat(3, 1fr); gap: .7rem; margin-top: .85rem; }
+    dl > div { background: white; border: 1px solid #d6dfe7; border-radius: .85rem; padding: 1.15rem; }
+    dt, footer { color: #495e71; font-size: .92rem; }
+    dd { font-size: clamp(1.25rem, 3vw, 1.9rem); font-weight: 600; margin-top: .55rem; }
+    footer { margin-top: 1.3rem; align-items: baseline; }
+    a { color: inherit; text-underline-offset: .15em; }
+    #status { margin: .5rem 0; }
+    @media (max-width: 30rem) { dl { gap: .4rem; } dl > div { padding: .85rem .55rem; } .landscape { left: 46%; } footer { display: block; } }
+  </style>
+</head>
+<body>
+  <main>
+    <header><h1>서울 날씨</h1><button id="refresh" type="button">새로고침</button></header>
+    <section class="hero" aria-labelledby="current-heading">
+      <div class="landscape" aria-hidden="true"><div class="tower"></div></div>
+      <h2 id="current-heading">현재 기온</h2>
+      <p class="reading"><span id="temperature">—</span><span class="unit">°C</span></p>
+      <p id="condition">날씨 조회 중</p>
+      <p class="date" id="timestamp">자료 기준 시각 확인 중</p>
+    </section>
+    <section aria-labelledby="details-heading">
+      <div class="section-head"><h2 id="details-heading">상세 날씨</h2></div>
+      <dl>
+        <div><dt>체감 온도</dt><dd id="feels">—</dd></div>
+        <div><dt>상대 습도</dt><dd id="humidity">—</dd></div>
+        <div><dt>풍속</dt><dd id="wind">—</dd></div>
+      </dl>
+    </section>
+    <footer>
+      <p>날씨 자료 · <a href="https://open-meteo.com/">Open-Meteo</a></p>
+      <p id="status" role="status"></p>
+    </footer>
+    <noscript>날씨를 조회하려면 브라우저에서 자바스크립트를 켜 주세요.</noscript>
+  </main>
+  <script>
+    const byId = id => document.getElementById(id);
+    const query = new URLSearchParams({
+      latitude: '37.5665', longitude: '126.978',
+      current: 'temperature_2m,relative_humidity_2m,wind_speed_10m,apparent_temperature,weather_code',
+      wind_speed_unit: 'ms', timezone: 'Asia/Seoul'
+    });
+    const weatherLabels = {
+      0:'맑음', 1:'대체로 맑음', 2:'구름 조금', 3:'흐림', 45:'안개', 48:'착빙 안개',
+      51:'약한 이슬비', 53:'이슬비', 55:'강한 이슬비', 56:'약한 어는 이슬비', 57:'강한 어는 이슬비',
+      61:'약한 비', 63:'비', 65:'강한 비', 66:'약한 어는 비', 67:'강한 어는 비',
+      71:'약한 눈', 73:'눈', 75:'강한 눈', 77:'싸락눈', 80:'약한 소나기', 81:'소나기',
+      82:'강한 소나기', 85:'약한 소낙눈', 86:'강한 소낙눈', 95:'뇌우', 96:'약한 우박을 동반한 뇌우', 99:'강한 우박을 동반한 뇌우'
+    };
+    let hasReading = false;
+
+    function formatMetric(value, unit) {
+      return Number.isFinite(value) ? value + unit : '—';
+    }
+
+    async function refreshWeather() {
+      const button = byId('refresh');
+      button.disabled = true;
+      byId('status').textContent = '날씨를 불러오는 중…';
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 12000);
+      try {
+        const response = await fetch('https://api.open-meteo.com/v1/forecast?' + query,
+          { signal: controller.signal, cache: 'no-store' });
+        if (!response.ok) throw new Error('API 응답 오류');
+        const { current } = await response.json();
+        if (!Number.isFinite(current?.temperature_2m) || !/^\d{4}-\d\d-\d\dT\d\d:\d\d$/.test(current.time)) {
+          throw new Error('현재 날씨 자료 부족');
+        }
+        byId('temperature').textContent = current.temperature_2m.toFixed(1);
+        byId('condition').textContent = weatherLabels[current.weather_code] ?? '날씨 상태 미제공';
+        byId('feels').textContent = formatMetric(current.apparent_temperature, ' °C');
+        byId('humidity').textContent = formatMetric(current.relative_humidity_2m, ' %');
+        byId('wind').textContent = formatMetric(current.wind_speed_10m, ' m/s');
+        byId('timestamp').textContent = current.time.replace('T', ' ') + ' 기준 · 한국시간';
+        byId('status').textContent = '날씨를 갱신했습니다.';
+        hasReading = true;
+      } catch {
+        if (!hasReading) {
+          byId('condition').textContent = '날씨 조회 실패';
+          byId('timestamp').textContent = '기준 시각 미확인';
+        }
+        byId('status').textContent = (hasReading ? '이전 조회값입니다. ' : '') + '연결을 확인하고 다시 시도해 주세요.';
+      } finally {
+        clearTimeout(timeout);
+        button.disabled = false;
+      }
+    }
+    byId('refresh').addEventListener('click', refreshWeather);
+    refreshWeather();
+  </script>
+</body>
+</html>
